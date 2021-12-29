@@ -63,9 +63,7 @@ contract FantasticCityBuilding is ERC721, ERC721Enumerable, VRFConsumerBase, Pau
       uint256 epic,
       uint256 legendary,
       uint256 value
-   ) public onlyOwner returns(uint256) {
-      uint256 newId = blueprints.length;
-
+   ) public onlyOwner {
       blueprints.push(
          Blueprint(
             name,
@@ -78,8 +76,6 @@ contract FantasticCityBuilding is ERC721, ERC721Enumerable, VRFConsumerBase, Pau
             false
          )
       );
-
-      return newId;
    }
 
    function disableBlueprint(uint256 id) public onlyOwner returns(bool) {
@@ -111,26 +107,19 @@ contract FantasticCityBuilding is ERC721, ERC721Enumerable, VRFConsumerBase, Pau
    }
 
    function getOwnedBlueprints() public view returns(uint256[] memory, uint256[] memory) {
-      uint256[] memory ids = new uint256[](blueprints.length);
-      uint256[] memory amount = new uint256[](blueprints.length);
-
-      for (uint256 i = 0; i < blueprints.length; i++) {
-         ids[i]    = i;
-         amount[i] = ownerBlueprints[msg.sender][i];
-      }
-
-      return (
-         ids,
-         amount
-      );
+      return _getBlueprintsAddress(msg.sender);
    }
 
    function getBlueprintsFromAddress(address _address) public onlyOwner view returns(uint256[] memory, uint256[] memory) {
+      return _getBlueprintsAddress(_address);
+   }
+
+   function _getBlueprintsAddress(address _address) internal view returns (uint256[] memory, uint256[] memory) {
       uint256[] memory ids = new uint256[](blueprints.length);
       uint256[] memory amount = new uint256[](blueprints.length);
 
       for (uint256 i = 0; i < blueprints.length; i++) {
-         ids[i]    = i;
+         ids[i] = i;
          amount[i] = ownerBlueprints[_address][i];
       }
 
@@ -151,13 +140,12 @@ contract FantasticCityBuilding is ERC721, ERC721Enumerable, VRFConsumerBase, Pau
    }
 
    function build(uint256 blueprintId) public whenNotPaused returns (bytes32) {
-      require(LINK.balanceOf(address(this)) >= fee, "Not enough LINK - fill contract with faucet");
+      require(LINK.balanceOf(address(this)) >= fee, "Not enough LINK");
       require(ownerBlueprints[msg.sender][blueprintId] > 0, "Not enough blueprint to build");
 
       ownerBlueprints[msg.sender][blueprintId]--;
 
-      bytes32 requestId = 1;
-      // bytes32 requestId = requestRandomness(keyHash, fee);
+      bytes32 requestId = requestRandomness(keyHash, fee);
       requestIdToSender[requestId] = msg.sender;
       requestIdBlueprintId[requestId] = blueprintId;
 
@@ -173,14 +161,13 @@ contract FantasticCityBuilding is ERC721, ERC721Enumerable, VRFConsumerBase, Pau
       uint256 rarity       = getRarity(randomNumbers[0], blueprints[requestIdBlueprintId[requestId]]);
       uint256 businessType = getBusinessType(randomNumbers[1]);
       uint256 size         = getSize(randomNumbers[2]);
-      uint256 reputation   = getReputation(rarity, businessType, size, randomNumbers[3]);
 
       buildings.push(
          Building(
             rarity,
             businessType,
             size,
-            reputation,
+            getReputation(rarity, businessType, size, randomNumbers[3]),
             1
          )
       );
@@ -230,18 +217,16 @@ contract FantasticCityBuilding is ERC721, ERC721Enumerable, VRFConsumerBase, Pau
       uint256[2] memory range = getRangeReputationByRarity(rarity);
 
       uint256 reputation = randomNumber % (range[1] + 1);
-
       reputation *= (1 + (businessType / 10) + (size / 10));
-      reputation = reputation < range[0] ? range[0] : (reputation > range[1] ? range[1] : reputation);
 
-      return reputation;
+      return reputation < range[0] ? range[0] : (reputation > range[1] ? range[1] : reputation);
    }
 
    function getRangeReputationByRarity(uint256 rarity) internal pure returns (uint256[2] memory) {
-      uint256 min = (rarity * 50) - 50 + 1;
-      uint256 max = rarity * 50;
-
-      return [min, max];
+      return [
+         (rarity * 50) - 50 + 1,
+         rarity * 50
+      ];
    }
 
    function getBuildingDetail(uint256 tokenId) public view 
