@@ -78,7 +78,7 @@ contract FantasticCityBuilding is ERC721, ERC721Enumerable, VRFConsumerBase, Pau
       );
    }
 
-   function disableBlueprint(uint256 id) public onlyOwner returns(bool) {
+   function disableBlueprint(uint256 id) public onlyOwner returns (bool) {
       require(!blueprints[id].disabled, "Blueprint already disabled");
 
       blueprints[id].disabled = true;
@@ -106,11 +106,11 @@ contract FantasticCityBuilding is ERC721, ERC721Enumerable, VRFConsumerBase, Pau
       );
    }
 
-   function getOwnedBlueprints() public view returns(uint256[] memory, uint256[] memory) {
+   function getOwnedBlueprints() public view returns (uint256[] memory, uint256[] memory) {
       return _getBlueprintsAddress(msg.sender);
    }
 
-   function getBlueprintsFromAddress(address _address) public onlyOwner view returns(uint256[] memory, uint256[] memory) {
+   function getBlueprintsFromAddress(address _address) public onlyOwner view returns (uint256[] memory, uint256[] memory) {
       return _getBlueprintsAddress(_address);
    }
 
@@ -155,6 +155,7 @@ contract FantasticCityBuilding is ERC721, ERC721Enumerable, VRFConsumerBase, Pau
    }
 
    function fulfillRandomness(bytes32 requestId, uint256 randomNumber) internal override {
+      require(requestIdToSender[requestId] != address(0), "Null address not allowed");
       uint256[] memory randomNumbers = expandRandomness(randomNumber, 4);
 
       uint256 newId        = buildings.length;
