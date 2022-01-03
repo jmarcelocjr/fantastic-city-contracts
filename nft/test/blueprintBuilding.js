@@ -36,4 +36,14 @@ describe("Building Blueprint", function () {
 
     expect((await contract.getBlueprintDetail(0))[6]).to.equal(18);
   });
+  it("Should return a total of 2 blueprints", async function () {
+    const token = await ethers.getContractFactory("FantasticCityBuildingBlueprint");
+    const contract = await token.deploy();
+    await contract.deployed();
+
+    await contract.createBlueprint("common", 43, 78, 93, 94, 99, 15);
+    await contract.createBlueprint("legendary", 0, 0, 0, 0, 99, 9999);
+
+    expect(await contract.getTotalBlueprints()).to.equal(2);
+  });
 });

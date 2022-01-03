@@ -211,8 +211,8 @@ contract FantasticCityBuilding is ERC721, ERC721Enumerable, VRFConsumerBase, Pau
       }
    }
 
-   function withdrawalToken(address _contract, address destination, uint256 amount) public onlyOwner {
-      IERC20 tokenContract = IERC20(_contract);
+   function withdrawalToken(address _address, address destination, uint256 amount) public onlyOwner {
+      IERC20 tokenContract = IERC20(_address);
 
       tokenContract.transfer(destination, amount);
    }
