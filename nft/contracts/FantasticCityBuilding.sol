@@ -8,10 +8,12 @@ import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
 import "@chainlink/contracts/src/v0.8/VRFConsumerBase.sol";
 import "@openzeppelin/contracts/security/Pausable.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "./IBuildingBlueprint.sol";
 
 contract FantasticCityBuilding is ERC721, ERC721Enumerable, VRFConsumerBase, Pausable, Ownable {
 
    IERC20 public fcToken;
+   IBuildingBlueprint public fcbBlueprint;
    address internal linkToken;
    bytes32 internal keyHash;
    uint256 public fee;
@@ -24,19 +26,7 @@ contract FantasticCityBuilding is ERC721, ERC721Enumerable, VRFConsumerBase, Pau
       uint256 level;
    }
 
-   struct Blueprint {
-      string  name;
-      uint256 common;
-      uint256 uncommon;
-      uint256 rare;
-      uint256 epic;
-      uint256 legendary;
-      uint256 value;
-      bool disabled;
-   }
-
    Building[] public buildings;
-   Blueprint[] public blueprints;
 
    mapping(address => mapping(uint256 => uint256)) public ownerBlueprints;
 
@@ -45,80 +35,31 @@ contract FantasticCityBuilding is ERC721, ERC721Enumerable, VRFConsumerBase, Pau
 
    event newBuilding(bytes32 indexed requestId);
 
-   constructor(address _fcToken, address _vrfCoordinator, address _linkToken, bytes32 _keyhash)
+   constructor(address _fcToken, address _fcbBlueprint, address _vrfCoordinator, address _linkToken, bytes32 _keyhash)
       VRFConsumerBase(_vrfCoordinator, _linkToken)
       ERC721("FantasticCityBuilding", "FCB")
    {
       fcToken = IERC20(_fcToken);
+      fcbBlueprint = IBuildingBlueprint(_fcbBlueprint);
       linkToken = _linkToken;
       keyHash = _keyhash;
       fee = 0.1 * 10 ** 18;
    }
 
-   function createBlueprint(
-      string memory name,
-      uint256 common,
-      uint256 uncommon,
-      uint256 rare,
-      uint256 epic,
-      uint256 legendary,
-      uint256 value
-   ) public onlyOwner {
-      blueprints.push(
-         Blueprint(
-            name,
-            common,
-            uncommon,
-            rare,
-            epic,
-            legendary,
-            value,
-            false
-         )
-      );
-   }
-
-   function disableBlueprint(uint256 id) public onlyOwner returns (bool) {
-      require(!blueprints[id].disabled, "Blueprint already disabled");
-
-      blueprints[id].disabled = true;
-
-      return true;
-   }
-
-   function getBlueprintDetail(uint256 id) public view returns(
-      string memory,
-      uint256,
-      uint256,
-      uint256,
-      uint256,
-      uint256,
-      uint256
-   ) {
-      return (
-         blueprints[id].name,
-         blueprints[id].common,
-         blueprints[id].uncommon,
-         blueprints[id].rare,
-         blueprints[id].epic,
-         blueprints[id].legendary,
-         blueprints[id].value
-      );
-   }
-
    function getOwnedBlueprints() public view returns (uint256[] memory, uint256[] memory) {
-      return _getBlueprintsAddress(msg.sender);
+      return _getBlueprintsByAddress(msg.sender);
    }
 
    function getBlueprintsFromAddress(address _address) public onlyOwner view returns (uint256[] memory, uint256[] memory) {
-      return _getBlueprintsAddress(_address);
+      return _getBlueprintsByAddress(_address);
    }
 
-   function _getBlueprintsAddress(address _address) internal view returns (uint256[] memory, uint256[] memory) {
-      uint256[] memory ids = new uint256[](blueprints.length);
-      uint256[] memory amount = new uint256[](blueprints.length);
+   function _getBlueprintsByAddress(address _address) internal view returns (uint256[] memory, uint256[] memory) {
+      uint256 totalBlueprint = fcbBlueprint.getTotalBlueprints();
+      uint256[] memory ids = new uint256[](totalBlueprint);
+      uint256[] memory amount = new uint256[](totalBlueprint);
 
-      for (uint256 i = 0; i < blueprints.length; i++) {
+      for (uint256 i = 0; i < totalBlueprint; i++) {
          ids[i] = i;
          amount[i] = ownerBlueprints[_address][i];
       }
@@ -130,9 +71,14 @@ contract FantasticCityBuilding is ERC721, ERC721Enumerable, VRFConsumerBase, Pau
    }
 
    function buyBlueprint(uint256 id) public whenNotPaused returns (bool) {
-      require(!blueprints[id].disabled || blueprints[id].value > 0, "Blueprint does not exist");
+      uint256 value;
+      bool disabled;
 
-      fcToken.transferFrom(msg.sender, address(this), blueprints[id].value);
+      (,,,,,,value,disabled) = fcbBlueprint.getBlueprintDetail(id);
+
+      require(!disabled && value > 0, "Blueprint does not exist");
+
+      fcToken.transferFrom(msg.sender, address(this), value);
 
       ownerBlueprints[msg.sender][id]++;
 
@@ -159,7 +105,7 @@ contract FantasticCityBuilding is ERC721, ERC721Enumerable, VRFConsumerBase, Pau
       uint256[] memory randomNumbers = expandRandomness(randomNumber, 4);
 
       uint256 newId        = buildings.length;
-      uint256 rarity       = getRarity(randomNumbers[0], blueprints[requestIdBlueprintId[requestId]]);
+      uint256 rarity       = getRarity(randomNumbers[0],requestIdBlueprintId[requestId]);
       uint256 businessType = getBusinessType(randomNumbers[1]);
       uint256 size         = getSize(randomNumbers[2]);
 
@@ -186,17 +132,26 @@ contract FantasticCityBuilding is ERC721, ERC721Enumerable, VRFConsumerBase, Pau
       return expandedValues;
    }
 
-   function getRarity(uint256 randomNumber, Blueprint memory blueprint) internal pure returns (uint256) {
+   function getRarity(uint256 randomNumber, uint256 blueprintId) internal view returns (uint256) {
+      uint256 common;
+      uint256 uncommon;
+      uint256 rare;
+      uint256 epic;
+      uint256 legendary;
+      (,common,uncommon,rare,epic,legendary,,) = fcbBlueprint.getBlueprintDetail(blueprintId);
+
       uint256 converted = randomNumber % 100;
 
-      if (converted >= blueprint.legendary) {
-         return 5;
-      } else if (converted >= blueprint.epic) {
-         return 4;
-      } else if (converted >= blueprint.rare) {
-         return 3;
-      } else if (converted >= blueprint.uncommon) {
+      if (converted <= common) {
+         return 1;
+      } else if (converted <= uncommon) {
          return 2;
+      } else if (converted <= rare) {
+         return 3;
+      } else if (converted <= epic) {
+         return 4;
+      } else if (converted <= legendary) {
+         return 5;
       }
 
       return 1;
@@ -248,16 +203,16 @@ contract FantasticCityBuilding is ERC721, ERC721Enumerable, VRFConsumerBase, Pau
       );
    }
 
-   function updateValue(uint256 blueprintId, uint256 value) public onlyOwner {
-      blueprints[blueprintId].value = value;
+   function updateAddress(uint256 _type, address _address) public onlyOwner {
+      if (_type == 0) {
+         fcToken = IERC20(_address);
+      } else if (_type == 1) {
+         fcbBlueprint = IBuildingBlueprint(_address);
+      }
    }
 
-   function updateTokenAddress(address _fcToken) public onlyOwner {
-      fcToken = IERC20(_fcToken);
-   }
-
-   function withdrawalToken(address contractAddress, address destination, uint256 amount) public onlyOwner {
-      IERC20 tokenContract = IERC20(contractAddress);
+   function withdrawalToken(address _contract, address destination, uint256 amount) public onlyOwner {
+      IERC20 tokenContract = IERC20(_contract);
 
       tokenContract.transfer(destination, amount);
    }
