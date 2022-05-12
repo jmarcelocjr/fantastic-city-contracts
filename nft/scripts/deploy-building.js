@@ -15,7 +15,13 @@ async function main() {
 
   // We get the contract to deploy
   const Building = await hre.ethers.getContractFactory("FantasticCityBuilding");
-  const building = await Building.deploy("0x55E4E57C11f571827547fa1ADeE75dC204673E96", "0xa555fC018435bef5A13C6c6870a9d4C11DEC329C", "0x84b9B910527Ad5C03A9Ca831909E21e236EA7b06", "0xcaf3c3727e033261d383b315559476f48034c13b18f8cafed4d871abe5049186");
+  const building = await Building.deploy(
+    "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+    "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0",
+    "0xa555fC018435bef5A13C6c6870a9d4C11DEC329C",
+    "0x84b9B910527Ad5C03A9Ca831909E21e236EA7b06",
+    "0xcaf3c3727e033261d383b315559476f48034c13b18f8cafed4d871abe5049186"
+  );
 
   await building.deployed();
 

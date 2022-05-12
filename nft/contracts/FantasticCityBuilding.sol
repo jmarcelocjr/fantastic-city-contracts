@@ -33,7 +33,7 @@ contract FantasticCityBuilding is ERC721, ERC721Enumerable, VRFConsumerBase, Pau
    mapping(bytes32 => address) public requestIdToSender;
    mapping(bytes32 => uint256) public requestIdBlueprintId;
 
-   event newBuilding(bytes32 indexed requestId);
+   event newBuilding(uint256 indexed id, address indexed _address);
 
    constructor(address _fcToken, address _fcbBlueprint, address _vrfCoordinator, address _linkToken, bytes32 _keyhash)
       VRFConsumerBase(_vrfCoordinator, _linkToken)
@@ -85,9 +85,9 @@ contract FantasticCityBuilding is ERC721, ERC721Enumerable, VRFConsumerBase, Pau
       return true;
    }
 
-   function build(uint256 blueprintId) public whenNotPaused returns (bytes32) {
+   function reveal(uint256 blueprintId) public whenNotPaused returns (bytes32) {
       require(LINK.balanceOf(address(this)) >= fee, "Not enough LINK");
-      require(ownerBlueprints[msg.sender][blueprintId] > 0, "Not enough blueprint to build");
+      require(ownerBlueprints[msg.sender][blueprintId] > 0, "Not enough blueprint");
 
       ownerBlueprints[msg.sender][blueprintId]--;
 
@@ -95,13 +95,12 @@ contract FantasticCityBuilding is ERC721, ERC721Enumerable, VRFConsumerBase, Pau
       requestIdToSender[requestId] = msg.sender;
       requestIdBlueprintId[requestId] = blueprintId;
 
-      emit newBuilding(requestId);
-
       return requestId;
    }
 
    function fulfillRandomness(bytes32 requestId, uint256 randomNumber) internal override {
-      require(requestIdToSender[requestId] != address(0), "Null address not allowed");
+      address _requester = requestIdToSender[requestId];
+      require(_requester != address(0), "Null address not allowed");
       uint256[] memory randomNumbers = expandRandomness(randomNumber, 4);
 
       uint256 newId        = buildings.length;
@@ -119,7 +118,27 @@ contract FantasticCityBuilding is ERC721, ERC721Enumerable, VRFConsumerBase, Pau
          )
       );
 
-      _safeMint(requestIdToSender[requestId], newId);
+      _safeMint(_requester, newId);
+
+      emit newBuilding(newId, _requester);
+
+      requestIdToSender[requestId] = address(0);
+   }
+
+   function revealTest(uint256 blueprintId) public whenNotPaused returns (bytes32) {
+      require(ownerBlueprints[msg.sender][blueprintId] > 0, "Not enough blueprint");
+
+      ownerBlueprints[msg.sender][blueprintId]--;
+
+      bytes32 requestId = "asd";
+      requestIdToSender[requestId] = msg.sender;
+      requestIdBlueprintId[requestId] = blueprintId;
+
+      return requestId;
+   }
+
+   function fulfillTest(bytes32 requestId, uint256 randomNumber) public {
+      fulfillRandomness(requestId, randomNumber);
    }
 
    function expandRandomness(uint256 randomNumber, uint256 n) internal pure returns (uint256[] memory) {
@@ -132,7 +151,7 @@ contract FantasticCityBuilding is ERC721, ERC721Enumerable, VRFConsumerBase, Pau
       return expandedValues;
    }
 
-   function getRarity(uint256 randomNumber, uint256 blueprintId) internal view returns (uint256) {
+   function getRarity(uint256 randomNumber, uint256 blueprintId) public view returns (uint256) {
       uint256 common;
       uint256 uncommon;
       uint256 rare;
@@ -157,32 +176,34 @@ contract FantasticCityBuilding is ERC721, ERC721Enumerable, VRFConsumerBase, Pau
       return 1;
    }
 
-   function getSize(uint256 randomNumber) internal pure returns (uint256) {
+   function getSize(uint256 randomNumber) public pure returns (uint256) {
       uint256 converted = randomNumber % 100;
 
       return converted < 59 ? 1 : (converted < 94 ? 2 : 3);
    }
 
-   function getBusinessType(uint256 randomNumber) internal pure returns (uint256) {
+   function getBusinessType(uint256 randomNumber) public pure returns (uint256) {
       uint256 converted = randomNumber % 100;
 
       return converted < 49 ? 1 : (converted < 79 ? 2 : 3);
    }
 
-   function getReputation(uint256 rarity, uint256 businessType, uint256 size, uint256 randomNumber) internal pure returns (uint256) {
-      uint256[2] memory range = getRangeReputationByRarity(rarity);
+   function getReputation(uint256 rarity, uint256 businessType, uint256 size, uint256 randomNumber) public pure returns (uint256) {
+      uint256 min;
+      uint256 max;
+      (min, max) = getRangeReputationByRarity(rarity);
 
-      uint256 reputation = randomNumber % (range[1] + 1);
+      uint256 reputation = randomNumber % (max + 1);
       reputation *= (1 + (businessType / 10) + (size / 10));
 
-      return reputation < range[0] ? range[0] : (reputation > range[1] ? range[1] : reputation);
+      return reputation < min ? min : (reputation > max ? max : reputation);
    }
 
-   function getRangeReputationByRarity(uint256 rarity) internal pure returns (uint256[2] memory) {
-      return [
+   function getRangeReputationByRarity(uint256 rarity) public pure returns (uint256, uint256) {
+      return (
          (rarity * 50) - 50 + 1,
          rarity * 50
-      ];
+      );
    }
 
    function getBuildingDetail(uint256 tokenId) public view 
@@ -194,12 +215,13 @@ contract FantasticCityBuilding is ERC721, ERC721Enumerable, VRFConsumerBase, Pau
          uint256
       )
    {
+      Building memory building = buildings[tokenId];
       return (
-         buildings[tokenId].rarity,
-         buildings[tokenId].businessType,
-         buildings[tokenId].size,
-         buildings[tokenId].reputation,
-         buildings[tokenId].level
+         building.rarity,
+         building.businessType,
+         building.size,
+         building.reputation,
+         building.level
       );
    }
 
